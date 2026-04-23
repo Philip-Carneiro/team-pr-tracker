@@ -1,0 +1,154 @@
+{
+  "name": "team-pr-tracker",
+  "displayName": "Team PR Tracker",
+  "description": "Track Pull Requests across repositories and team members with notifications for new PRs, comments, and stale PRs.",
+  "version": "0.2.0",
+  "publisher": "philip-carneiro",
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "teamPrTracker",
+          "title": "Team PR Tracker",
+          "icon": "$(git-pull-request)"
+        }
+      ]
+    },
+    "views": {
+      "teamPrTracker": [
+        {
+          "id": "teamPrTracker.prList",
+          "name": "All PRs"
+        },
+        {
+          "id": "teamPrTracker.myPrs",
+          "name": "My PRs"
+        },
+        {
+          "id": "teamPrTracker.stalePrs",
+          "name": "Stale PRs"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "teamPrTracker.refreshNow",
+        "title": "Refresh PRs",
+        "icon": "$(refresh)",
+        "category": "Team PR Tracker"
+      },
+      {
+        "command": "teamPrTracker.setToken",
+        "title": "Set GitHub Token",
+        "category": "Team PR Tracker"
+      },
+      {
+        "command": "teamPrTracker.resetToken",
+        "title": "Reset GitHub Token",
+        "category": "Team PR Tracker"
+      },
+      {
+        "command": "teamPrTracker.viewTokenStatus",
+        "title": "View Token Status",
+        "category": "Team PR Tracker"
+      },
+      {
+        "command": "teamPrTracker.openPr",
+        "title": "Open PR in Browser",
+        "icon": "$(link-external)",
+        "category": "Team PR Tracker"
+      },
+      {
+        "command": "teamPrTracker.filterByAuthor",
+        "title": "Filter PRs by Author",
+        "icon": "$(filter)",
+        "category": "Team PR Tracker"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "teamPrTracker.refreshNow",
+          "when": "view == teamPrTracker.prList || view == teamPrTracker.myPrs || view == teamPrTracker.stalePrs",
+          "group": "navigation"
+        },
+        {
+          "command": "teamPrTracker.filterByAuthor",
+          "when": "view == teamPrTracker.prList",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "teamPrTracker.openPr",
+          "when": "viewItem == pullRequest",
+          "group": "inline"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Team PR Tracker",
+      "properties": {
+        "teamPrTracker.githubToken": {
+          "type": "null",
+          "markdownDescription": "GitHub token is stored securely using VS Code's SecretStorage (never in settings.json).\n\n[$(key) Set Token](command:teamPrTracker.setToken) | [$(info) View Status](command:teamPrTracker.viewTokenStatus) | [$(trash) Reset Token](command:teamPrTracker.resetToken)",
+          "order": 0
+        },
+        "teamPrTracker.githubUsername": {
+          "type": "string",
+          "default": "",
+          "description": "Your GitHub username (used to detect review requests, unread comments, and populate My PRs)",
+          "order": 1
+        },
+        "teamPrTracker.watchedRepos": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "List of repositories to monitor (format: owner/repo)",
+          "order": 2
+        },
+        "teamPrTracker.watchedUsers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "List of GitHub usernames whose PRs to track",
+          "order": 3
+        },
+        "teamPrTracker.stalePrDays": {
+          "type": "number",
+          "default": 3,
+          "description": "Number of days without updates before a PR is considered stale",
+          "order": 4
+        },
+        "teamPrTracker.pollingIntervalMinutes": {
+          "type": "number",
+          "default": 10,
+          "description": "Auto-refresh interval in minutes",
+          "order": 5
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.93.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "esbuild": "^0.24.0",
+    "vitest": "^2.1.0",
+    "@vscode/vsce": "^3.2.0"
+  }
+}
