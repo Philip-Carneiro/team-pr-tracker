@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { CheckStatus, PRStatus, PullRequest, ReviewRelation } from './types.js';
+import type { PRStatus, PullRequest } from './types.js';
 import { isStale, daysSinceUpdate } from './stalePrDetector.js';
 
 type TreeElement = RepoGroup | PrTreeItem;

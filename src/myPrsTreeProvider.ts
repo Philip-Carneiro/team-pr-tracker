@@ -104,7 +104,7 @@ class MyPrTreeItem extends vscode.TreeItem {
   ) {
     super(pr.title, vscode.TreeItemCollapsibleState.None);
 
-    const days = daysSinceUpdate(pr);
+    const _days = daysSinceUpdate(pr);
 
     const parts: string[] = [];
 

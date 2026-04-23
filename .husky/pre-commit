@@ -1,0 +1,5 @@
+echo "Running tests..."
+npm run test || { echo "Tests failed — commit aborted."; exit 1; }
+
+echo "Running lint-staged..."
+npx lint-staged

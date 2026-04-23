@@ -70,9 +70,7 @@ describe('StalePrsTreeProvider', () => {
 
     const provider = new StalePrsTreeProvider();
     provider.updateData(
-      [
-        makePR({ id: 1, status: 'merged', updatedAt: '2026-04-10T10:00:00Z' }),
-      ],
+      [makePR({ id: 1, status: 'merged', updatedAt: '2026-04-10T10:00:00Z' })],
       3,
     );
 
@@ -85,10 +83,7 @@ describe('StalePrsTreeProvider', () => {
     vi.setSystemTime(new Date('2026-04-22T10:00:00Z'));
 
     const provider = new StalePrsTreeProvider();
-    provider.updateData(
-      [makePR({ id: 1, updatedAt: '2026-04-21T10:00:00Z' })],
-      3,
-    );
+    provider.updateData([makePR({ id: 1, updatedAt: '2026-04-21T10:00:00Z' })], 3);
 
     const roots = provider.getChildren();
     expect(roots).toHaveLength(0);
@@ -99,10 +94,7 @@ describe('StalePrsTreeProvider', () => {
     vi.setSystemTime(new Date('2026-04-25T10:00:00Z'));
 
     const provider = new StalePrsTreeProvider();
-    provider.updateData(
-      [makePR({ id: 1, updatedAt: '2026-04-15T10:00:00Z' })],
-      3,
-    );
+    provider.updateData([makePR({ id: 1, updatedAt: '2026-04-15T10:00:00Z' })], 3);
 
     const roots = provider.getChildren();
     const group = roots[0] as RepoGroup;
@@ -151,18 +143,12 @@ describe('StalePrsTreeProvider', () => {
     vi.setSystemTime(new Date('2026-04-25T10:00:00Z'));
 
     const provider = new StalePrsTreeProvider();
-    provider.updateData(
-      [makePR({ id: 1, updatedAt: '2026-04-20T10:00:00Z' })],
-      7,
-    );
+    provider.updateData([makePR({ id: 1, updatedAt: '2026-04-20T10:00:00Z' })], 7);
 
     const roots = provider.getChildren();
     expect(roots).toHaveLength(0);
 
-    provider.updateData(
-      [makePR({ id: 1, updatedAt: '2026-04-20T10:00:00Z' })],
-      3,
-    );
+    provider.updateData([makePR({ id: 1, updatedAt: '2026-04-20T10:00:00Z' })], 3);
 
     const rootsAfter = provider.getChildren();
     expect(rootsAfter).toHaveLength(1);

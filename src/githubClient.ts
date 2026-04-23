@@ -1,10 +1,4 @@
-import type {
-  CheckStatus,
-  PRStatus,
-  PrComment,
-  PullRequest,
-  ReviewRelation,
-} from './types.js';
+import type { CheckStatus, PRStatus, PrComment, PullRequest, ReviewRelation } from './types.js';
 
 interface GitHubPR {
   id: number;
@@ -162,7 +156,9 @@ function normalizeRepoUrl(repoInput: string): string {
     return directMatch[1];
   }
 
-  throw new Error(`Invalid repository format: ${repoInput}. Use "owner/repo" or "https://github.com/owner/repo"`);
+  throw new Error(
+    `Invalid repository format: ${repoInput}. Use "owner/repo" or "https://github.com/owner/repo"`,
+  );
 }
 
 /**
@@ -227,9 +223,7 @@ async function fetchReviewRelation(
   );
   if (!reviews) return 'not_involved';
 
-  const myReviews = reviews.filter(
-    (r) => r.user?.login.toLowerCase() === myUsername.toLowerCase(),
-  );
+  const myReviews = reviews.filter((r) => r.user?.login.toLowerCase() === myUsername.toLowerCase());
   if (myReviews.length === 0) return 'not_involved';
 
   const latestReview = myReviews[myReviews.length - 1];
@@ -286,11 +280,17 @@ export async function fetchPRsForRepo(
     const enriched = await Promise.all(
       basePRs.map(async (pr) => {
         const [checkStatus, reviewRelation] = await Promise.all([
-          fetchCommitStatus(normalizedRepo, pr.number, token, cache).catch(() => 'none' as CheckStatus),
+          fetchCommitStatus(normalizedRepo, pr.number, token, cache).catch(
+            () => 'none' as CheckStatus,
+          ),
           normalizedMyUsername && pr.status === 'open'
-            ? fetchReviewRelation(normalizedRepo, pr.number, normalizedMyUsername, token, cache).catch(
-                () => 'not_involved' as ReviewRelation,
-              )
+            ? fetchReviewRelation(
+                normalizedRepo,
+                pr.number,
+                normalizedMyUsername,
+                token,
+                cache,
+              ).catch(() => 'not_involved' as ReviewRelation)
             : Promise.resolve('not_involved' as ReviewRelation),
         ]);
 
@@ -323,7 +323,8 @@ export async function fetchAllPRs(
     if (result.status === 'fulfilled') {
       allPRs.push(...result.value);
     } else {
-      const errorMsg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      const errorMsg =
+        result.reason instanceof Error ? result.reason.message : String(result.reason);
       errors.push(`${repos[index]}: ${errorMsg}`);
 
       if (result.reason instanceof RateLimitError) {

@@ -7,10 +7,7 @@ export interface NotificationResult {
   newCommentIds: number[];
 }
 
-export function detectNewPRs(
-  currentPRs: PullRequest[],
-  cachedState: CachedState,
-): PullRequest[] {
+export function detectNewPRs(currentPRs: PullRequest[], cachedState: CachedState): PullRequest[] {
   const previousIds = new Set(cachedState.notifiedPrIds);
   return currentPRs.filter((pr) => !previousIds.has(pr.id));
 }
@@ -74,9 +71,7 @@ export async function notifyNewComments(
       `New comment by ${comments[0].author} on "${comments[0].prTitle}"`,
     );
   } else {
-    await vscode.window.showInformationMessage(
-      `${comments.length} new comments on your PRs`,
-    );
+    await vscode.window.showInformationMessage(`${comments.length} new comments on your PRs`);
   }
 }
 

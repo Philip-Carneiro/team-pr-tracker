@@ -2,13 +2,23 @@
   "name": "team-pr-tracker",
   "displayName": "Team PR Tracker",
   "description": "Track Pull Requests across repositories and team members with notifications for new PRs, comments, and stale PRs.",
-  "version": "0.3.0",
+  "version": "1.0.0",
+  "license": "MIT",
   "publisher": "philip-carneiro",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Philip-Carneiro/team-pr-tracker.git"
+  },
   "engines": {
     "vscode": "^1.93.0"
   },
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -108,14 +118,18 @@
         },
         "teamPrTracker.watchedRepos": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "List of repositories to monitor (format: owner/repo)",
           "order": 2
         },
         "teamPrTracker.watchedUsers": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "List of GitHub usernames whose PRs to track",
           "order": 3
@@ -143,14 +157,37 @@
     "watch": "node esbuild.js --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "package": "vsce package"
+    "package": "vsce package",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix --max-warnings 0"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "devDependencies": {
-    "@types/vscode": "^1.93.0",
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
-    "typescript": "^5.7.0",
+    "@types/vscode": "^1.93.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.0",
+    "@typescript-eslint/parser": "^8.59.0",
+    "@vscode/vsce": "^3.2.0",
     "esbuild": "^0.24.0",
-    "vitest": "^2.1.0",
-    "@vscode/vsce": "^3.2.0"
+    "eslint": "^10.2.1",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.3",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.59.0",
+    "vitest": "^2.1.0"
   }
 }

@@ -48,7 +48,7 @@ function readConfig(): TrackerConfig {
   return {
     githubUsername: rawUsername ? normalizeUsername(rawUsername) : '',
     watchedRepos: config.get<string[]>('watchedRepos', []),
-    watchedUsers: rawWatchedUsers.map(user => normalizeUsername(user)),
+    watchedUsers: rawWatchedUsers.map((user) => normalizeUsername(user)),
     stalePrDays: config.get<number>('stalePrDays', 3),
     pollingIntervalMinutes: clampPollingInterval(rawPollingInterval),
   };
@@ -75,9 +75,7 @@ async function buildMyPrsActivityMap(
   if (!githubUsername) return activityMap;
 
   const userLower = githubUsername.toLowerCase();
-  const myPRs = prs.filter(
-    (pr) => pr.author.toLowerCase() === userLower && pr.status === 'open',
-  );
+  const myPRs = prs.filter((pr) => pr.author.toLowerCase() === userLower && pr.status === 'open');
 
   const results = await Promise.allSettled(
     myPRs.map(async (pr) => {
@@ -216,7 +214,13 @@ export function activate(context: vscode.ExtensionContext): void {
 
         let newComments: { prTitle: string; commentId: number; author: string }[] = [];
         if (config.githubUsername) {
-          newComments = await checkForNewComments(prs, previousState, config.githubUsername, token, cache);
+          newComments = await checkForNewComments(
+            prs,
+            previousState,
+            config.githubUsername,
+            token,
+            cache,
+          );
         }
 
         const updatedState = buildUpdatedNotificationState(
@@ -363,9 +367,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const availableAuthors = treeProvider.getAvailableAuthors();
 
       if (availableAuthors.length === 0) {
-        vscode.window.showInformationMessage(
-          'Team PR Tracker: No PRs loaded yet. Refresh first.',
-        );
+        vscode.window.showInformationMessage('Team PR Tracker: No PRs loaded yet. Refresh first.');
         return;
       }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchAllPRs, fetchPRComments, normalizeUsername, RateLimitError, RequestCache } from '../githubClient.js';
+import { fetchAllPRs, fetchPRComments, normalizeUsername, RequestCache } from '../githubClient.js';
 
 const mockFetch = vi.fn();
 
@@ -111,7 +111,7 @@ describe('fetchAllPRs', () => {
   });
 
   it('handles partial failures across repos', async () => {
-    let callIndex = 0;
+    const _callIndex = 0;
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/search/issues') && url.includes('org%2Fbroken')) {
         return Promise.resolve(makeJsonResponse({}, false, 500));

@@ -108,12 +108,7 @@ describe('MyPrsTreeProvider', () => {
 
   it('is case-insensitive for username matching', () => {
     const provider = new MyPrsTreeProvider();
-    provider.updateData(
-      [makePR({ id: 1, author: 'Alice' })],
-      'alice',
-      3,
-      new Map(),
-    );
+    provider.updateData([makePR({ id: 1, author: 'Alice' })], 'alice', 3, new Map());
 
     const roots = provider.getChildren();
     expect(roots).toHaveLength(1);
@@ -140,12 +135,7 @@ describe('MyPrsTreeProvider', () => {
 
   it('returns empty when no githubUsername configured', () => {
     const provider = new MyPrsTreeProvider();
-    provider.updateData(
-      [makePR({ id: 1, author: 'alice' })],
-      '',
-      3,
-      new Map(),
-    );
+    provider.updateData([makePR({ id: 1, author: 'alice' })], '', 3, new Map());
 
     const roots = provider.getChildren();
     expect(roots).toHaveLength(0);
@@ -165,12 +155,7 @@ describe('MyPrsTreeProvider', () => {
     });
 
     const provider = new MyPrsTreeProvider();
-    provider.updateData(
-      [makePR({ id: 1, author: 'alice' })],
-      'alice',
-      3,
-      activityMap,
-    );
+    provider.updateData([makePR({ id: 1, author: 'alice' })], 'alice', 3, activityMap);
 
     const roots = provider.getChildren();
     const group = roots[0] as RepoGroup;
@@ -192,12 +177,7 @@ describe('MyPrsTreeProvider', () => {
     });
 
     const provider = new MyPrsTreeProvider();
-    provider.updateData(
-      [makePR({ id: 1, author: 'alice' })],
-      'alice',
-      3,
-      activityMap,
-    );
+    provider.updateData([makePR({ id: 1, author: 'alice' })], 'alice', 3, activityMap);
 
     const roots = provider.getChildren();
     const group = roots[0] as RepoGroup;
@@ -210,12 +190,7 @@ describe('MyPrsTreeProvider', () => {
     vi.setSystemTime(new Date('2026-04-22T10:00:00Z'));
 
     const provider = new MyPrsTreeProvider();
-    provider.updateData(
-      [makePR({ id: 1, author: 'alice' })],
-      'alice',
-      3,
-      new Map(),
-    );
+    provider.updateData([makePR({ id: 1, author: 'alice' })], 'alice', 3, new Map());
 
     const roots = provider.getChildren();
     const group = roots[0] as RepoGroup;

@@ -29,10 +29,7 @@ describe('PrTreeProvider', () => {
     it('shows all PRs when no filter is set', () => {
       const provider = new PrTreeProvider();
       provider.updateData(
-        [
-          makePR({ id: 1, author: 'alice' }),
-          makePR({ id: 2, author: 'bob' }),
-        ],
+        [makePR({ id: 1, author: 'alice' }), makePR({ id: 2, author: 'bob' })],
         3,
         null,
       );
@@ -110,10 +107,7 @@ describe('PrTreeProvider', () => {
     it('clears filter when set to empty array', () => {
       const provider = new PrTreeProvider();
       provider.updateData(
-        [
-          makePR({ id: 1, author: 'alice' }),
-          makePR({ id: 2, author: 'bob' }),
-        ],
+        [makePR({ id: 1, author: 'alice' }), makePR({ id: 2, author: 'bob' })],
         3,
         null,
       );
@@ -190,10 +184,7 @@ describe('PrTreeProvider', () => {
     it('sorts repos alphabetically', () => {
       const provider = new PrTreeProvider();
       provider.updateData(
-        [
-          makePR({ id: 1, repo: 'org/zebra' }),
-          makePR({ id: 2, repo: 'org/alpha' }),
-        ],
+        [makePR({ id: 1, repo: 'org/zebra' }), makePR({ id: 2, repo: 'org/alpha' })],
         3,
         null,
       );

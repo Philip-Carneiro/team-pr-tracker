@@ -2,7 +2,11 @@
 .vscode-test/**
 src/**
 node_modules/**
+docs/**
 .gitignore
 *.map
+*.vsix
 esbuild.js
 tsconfig.json
+vitest.config.ts
+images/icon.svg
