@@ -4,7 +4,7 @@
   "description": "Track Pull Requests across repositories and team members with notifications for new PRs, comments, and stale PRs.",
   "version": "1.0.0",
   "license": "MIT",
-  "publisher": "philip-carneiro",
+  "publisher": "PhilipCarneiro",
   "icon": "images/icon.png",
   "repository": {
     "type": "git",

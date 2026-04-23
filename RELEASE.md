@@ -201,7 +201,7 @@ If a release has issues after publishing:
 If the extension was published to the Marketplace:
 
 ```bash
-npx @vscode/vsce unpublish philip-carneiro.team-pr-tracker
+npx @vscode/vsce unpublish PhilipCarneiro.team-pr-tracker
 ```
 
 Or publish a patched version — the Marketplace will serve the latest version automatically.
