@@ -2,7 +2,7 @@
   "name": "team-pr-tracker",
   "displayName": "Team PR Tracker",
   "description": "Track Pull Requests across repositories and team members with notifications for new PRs, comments, and stale PRs.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "philip-carneiro",
   "engines": {
     "vscode": "^1.93.0"
@@ -128,8 +128,10 @@
         },
         "teamPrTracker.pollingIntervalMinutes": {
           "type": "number",
-          "default": 10,
-          "description": "Auto-refresh interval in minutes",
+          "default": 3,
+          "minimum": 3,
+          "maximum": 10,
+          "description": "Auto-refresh interval in minutes (minimum: 3, maximum: 10). Values outside this range will be clamped automatically.",
           "order": 5
         }
       }

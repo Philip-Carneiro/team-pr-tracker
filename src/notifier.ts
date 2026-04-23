@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { CachedState, PullRequest } from './types.js';
-import { fetchPRComments } from './githubClient.js';
+import { fetchPRComments, type RequestCache } from './githubClient.js';
 
 export interface NotificationResult {
   newPrIds: number[];
@@ -20,6 +20,7 @@ export async function checkForNewComments(
   cachedState: CachedState,
   myUsername: string,
   token?: string,
+  cache?: RequestCache,
 ): Promise<{ prTitle: string; commentId: number; author: string }[]> {
   const knownCommentIds = new Set(cachedState.notifiedCommentIds);
   const newComments: { prTitle: string; commentId: number; author: string }[] = [];
@@ -30,7 +31,7 @@ export async function checkForNewComments(
 
   for (const pr of myPRs) {
     try {
-      const comments = await fetchPRComments(pr.repo, pr.number, token);
+      const comments = await fetchPRComments(pr.repo, pr.number, token, cache);
       for (const comment of comments) {
         if (
           !knownCommentIds.has(comment.id) &&

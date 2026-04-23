@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchAllPRs, fetchPRComments, RateLimitError } from '../githubClient.js';
+import { fetchAllPRs, fetchPRComments, normalizeUsername, RateLimitError, RequestCache } from '../githubClient.js';
 
 const mockFetch = vi.fn();
 
@@ -147,6 +147,26 @@ describe('fetchAllPRs', () => {
     const prs = await fetchAllPRs(['org/repo'], ['alice']);
     expect(prs).toHaveLength(0);
   });
+
+  it('uses RequestCache to avoid duplicate requests', async () => {
+    setupMockForSinglePR(sampleGitHubPR, 'success');
+    const cache = new RequestCache();
+
+    const prs = await fetchAllPRs(['org/repo'], ['alice'], 'token', 'bob', cache);
+    expect(prs).toHaveLength(1);
+
+    const callCount = mockFetch.mock.calls.length;
+
+    const prs2 = await fetchAllPRs(['org/repo'], ['alice'], 'token', 'bob', cache);
+    expect(prs2).toHaveLength(1);
+
+    // The search/issues call is NOT cached (uses raw fetch), but enrichment calls should be cached
+    // The second fetchAllPRs call will make a new search call, but cached enrichment calls
+    // won't hit fetch again. So total calls should be less than 2x the original.
+    expect(mockFetch.mock.calls.length).toBeLessThan(callCount * 2);
+
+    cache.clear();
+  });
 });
 
 describe('fetchPRComments', () => {
@@ -186,5 +206,139 @@ describe('fetchPRComments', () => {
 
     const comments = await fetchPRComments('org/repo', 42, 'token');
     expect(comments).toHaveLength(0);
+  });
+
+  it('uses RequestCache to deduplicate comment fetches', async () => {
+    const issueComments = [
+      { id: 1, user: { login: 'bob' }, body: 'LGTM', created_at: '2026-04-02T10:00:00Z' },
+    ];
+    const reviewComments = [
+      { id: 2, user: { login: 'carol' }, body: 'Fix', created_at: '2026-04-01T10:00:00Z' },
+    ];
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/issues/') && url.includes('/comments')) {
+        return Promise.resolve(makeJsonResponse(issueComments));
+      }
+      if (url.includes('/pulls/') && url.includes('/comments')) {
+        return Promise.resolve(makeJsonResponse(reviewComments));
+      }
+      return Promise.resolve(makeJsonResponse({}, false, 404));
+    });
+
+    const cache = new RequestCache();
+
+    const comments1 = await fetchPRComments('org/repo', 42, 'token', cache);
+    expect(comments1).toHaveLength(2);
+    const callsAfterFirst = mockFetch.mock.calls.length;
+
+    const comments2 = await fetchPRComments('org/repo', 42, 'token', cache);
+    expect(comments2).toHaveLength(2);
+
+    // Second call should not make any new fetch requests (URLs are cached)
+    expect(mockFetch.mock.calls.length).toBe(callsAfterFirst);
+
+    cache.clear();
+  });
+});
+
+describe('normalizeUsername', () => {
+  it('removes @ prefix from username', () => {
+    expect(normalizeUsername('@alice')).toBe('alice');
+    expect(normalizeUsername('@Philip-Carneiro')).toBe('Philip-Carneiro');
+  });
+
+  it('keeps username without @ unchanged', () => {
+    expect(normalizeUsername('alice')).toBe('alice');
+    expect(normalizeUsername('Philip-Carneiro')).toBe('Philip-Carneiro');
+  });
+
+  it('trims whitespace', () => {
+    expect(normalizeUsername('  alice  ')).toBe('alice');
+    expect(normalizeUsername('  @alice  ')).toBe('alice');
+  });
+
+  it('handles empty string', () => {
+    expect(normalizeUsername('')).toBe('');
+    expect(normalizeUsername('   ')).toBe('');
+  });
+});
+
+describe('RequestCache', () => {
+  it('returns cached result for same URL', async () => {
+    const cache = new RequestCache();
+    let fetchCount = 0;
+
+    mockFetch.mockImplementation(() => {
+      fetchCount++;
+      return Promise.resolve(makeJsonResponse({ data: 'test' }));
+    });
+
+    const headers = { Accept: 'application/json' };
+    const result1 = await cache.fetchJsonCached('https://api.example.com/test', headers);
+    const result2 = await cache.fetchJsonCached('https://api.example.com/test', headers);
+
+    expect(result1).toEqual({ data: 'test' });
+    expect(result2).toEqual({ data: 'test' });
+    expect(fetchCount).toBe(1);
+  });
+
+  it('makes separate requests for different URLs', async () => {
+    const cache = new RequestCache();
+    let fetchCount = 0;
+
+    mockFetch.mockImplementation((url: string) => {
+      fetchCount++;
+      return Promise.resolve(makeJsonResponse({ url }));
+    });
+
+    const headers = { Accept: 'application/json' };
+    await cache.fetchJsonCached('https://api.example.com/a', headers);
+    await cache.fetchJsonCached('https://api.example.com/b', headers);
+
+    expect(fetchCount).toBe(2);
+  });
+
+  it('clears cache correctly', async () => {
+    const cache = new RequestCache();
+    let fetchCount = 0;
+
+    mockFetch.mockImplementation(() => {
+      fetchCount++;
+      return Promise.resolve(makeJsonResponse({ data: 'test' }));
+    });
+
+    const headers = { Accept: 'application/json' };
+    await cache.fetchJsonCached('https://api.example.com/test', headers);
+    expect(fetchCount).toBe(1);
+
+    cache.clear();
+
+    await cache.fetchJsonCached('https://api.example.com/test', headers);
+    expect(fetchCount).toBe(2);
+  });
+
+  it('handles concurrent requests to the same URL', async () => {
+    const cache = new RequestCache();
+    let fetchCount = 0;
+
+    mockFetch.mockImplementation(() => {
+      fetchCount++;
+      return new Promise((resolve) =>
+        setTimeout(() => resolve(makeJsonResponse({ data: 'concurrent' })), 10),
+      );
+    });
+
+    const headers = { Accept: 'application/json' };
+    const [r1, r2, r3] = await Promise.all([
+      cache.fetchJsonCached('https://api.example.com/same', headers),
+      cache.fetchJsonCached('https://api.example.com/same', headers),
+      cache.fetchJsonCached('https://api.example.com/same', headers),
+    ]);
+
+    expect(r1).toEqual({ data: 'concurrent' });
+    expect(r2).toEqual({ data: 'concurrent' });
+    expect(r3).toEqual({ data: 'concurrent' });
+    expect(fetchCount).toBe(1);
   });
 });

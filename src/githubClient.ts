@@ -56,12 +56,32 @@ interface GitHubCommit {
   author: { login: string } | null;
 }
 
+export class RequestCache {
+  private cache = new Map<string, Promise<unknown>>();
+
+  fetchJsonCached<T>(url: string, headers: Record<string, string>): Promise<T | null> {
+    const existing = this.cache.get(url);
+    if (existing) {
+      return existing as Promise<T | null>;
+    }
+    const promise = fetchJson<T>(url, headers);
+    this.cache.set(url, promise as Promise<unknown>);
+    return promise;
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+}
+
 function buildHeaders(token?: string): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
   };
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    // GitHub API uses 'token' prefix for Personal Access Tokens, not 'Bearer'
+    headers['Authorization'] = `token ${token}`;
   }
   return headers;
 }
@@ -102,6 +122,17 @@ async function fetchJson<T>(url: string, headers: Record<string, string>): Promi
   }
 }
 
+function fetchWithCache<T>(
+  url: string,
+  headers: Record<string, string>,
+  cache?: RequestCache,
+): Promise<T | null> {
+  if (cache) {
+    return cache.fetchJsonCached<T>(url, headers);
+  }
+  return fetchJson<T>(url, headers);
+}
+
 export class RateLimitError extends Error {
   constructor() {
     super('GitHub API rate limit exceeded. Try again later or set a GitHub token.');
@@ -134,22 +165,36 @@ function normalizeRepoUrl(repoInput: string): string {
   throw new Error(`Invalid repository format: ${repoInput}. Use "owner/repo" or "https://github.com/owner/repo"`);
 }
 
+/**
+ * Normalizes a GitHub username by removing @ prefix if present
+ * Examples:
+ * - "@username" -> "username"
+ * - "username" -> "username"
+ * - "@Philip-Carneiro" -> "Philip-Carneiro"
+ */
+export function normalizeUsername(username: string): string {
+  return username.trim().replace(/^@/, '');
+}
+
 async function fetchCommitStatus(
   repo: string,
   prNumber: number,
   token?: string,
+  cache?: RequestCache,
 ): Promise<CheckStatus> {
   const headers = buildHeaders(token);
 
-  const prData = await fetchJson<{ head?: { sha: string } }>(
+  const prData = await fetchWithCache<{ head?: { sha: string } }>(
     `https://api.github.com/repos/${repo}/pulls/${prNumber}`,
     headers,
+    cache,
   );
   if (!prData?.head?.sha) return 'none';
 
-  const statusData = await fetchJson<GitHubCombinedStatus>(
+  const statusData = await fetchWithCache<GitHubCombinedStatus>(
     `https://api.github.com/repos/${repo}/commits/${prData.head.sha}/status`,
     headers,
+    cache,
   );
   if (!statusData) return 'none';
 
@@ -161,21 +206,24 @@ async function fetchReviewRelation(
   prNumber: number,
   myUsername: string,
   token?: string,
+  cache?: RequestCache,
 ): Promise<ReviewRelation> {
   const headers = buildHeaders(token);
 
-  const reviewersData = await fetchJson<GitHubRequestedReviewers>(
+  const reviewersData = await fetchWithCache<GitHubRequestedReviewers>(
     `https://api.github.com/repos/${repo}/pulls/${prNumber}/requested_reviewers`,
     headers,
+    cache,
   );
 
   if (reviewersData?.users?.some((u) => u.login.toLowerCase() === myUsername.toLowerCase())) {
     return 'needs_my_review';
   }
 
-  const reviews = await fetchJson<GitHubReview[]>(
+  const reviews = await fetchWithCache<GitHubReview[]>(
     `https://api.github.com/repos/${repo}/pulls/${prNumber}/reviews`,
     headers,
+    cache,
   );
   if (!reviews) return 'not_involved';
 
@@ -196,15 +244,18 @@ export async function fetchPRsForRepo(
   authors: string[],
   token?: string,
   myUsername?: string,
+  cache?: RequestCache,
 ): Promise<PullRequest[]> {
   const normalizedRepo = normalizeRepoUrl(repo);
+  const normalizedMyUsername = myUsername ? normalizeUsername(myUsername) : undefined;
   const allPRs: PullRequest[] = [];
   const headers = buildHeaders(token);
 
   for (const author of authors) {
+    const normalizedAuthor = normalizeUsername(author);
     const url =
       `https://api.github.com/search/issues?q=` +
-      encodeURIComponent(`repo:${normalizedRepo} type:pr author:${author} is:open`) +
+      encodeURIComponent(`repo:${normalizedRepo} type:pr author:${normalizedAuthor} is:open`) +
       `&per_page=100&sort=created&order=desc`;
 
     const response = await fetch(url, { headers });
@@ -235,9 +286,9 @@ export async function fetchPRsForRepo(
     const enriched = await Promise.all(
       basePRs.map(async (pr) => {
         const [checkStatus, reviewRelation] = await Promise.all([
-          fetchCommitStatus(normalizedRepo, pr.number, token).catch(() => 'none' as CheckStatus),
-          myUsername && pr.status === 'open'
-            ? fetchReviewRelation(normalizedRepo, pr.number, myUsername, token).catch(
+          fetchCommitStatus(normalizedRepo, pr.number, token, cache).catch(() => 'none' as CheckStatus),
+          normalizedMyUsername && pr.status === 'open'
+            ? fetchReviewRelation(normalizedRepo, pr.number, normalizedMyUsername, token, cache).catch(
                 () => 'not_involved' as ReviewRelation,
               )
             : Promise.resolve('not_involved' as ReviewRelation),
@@ -258,24 +309,40 @@ export async function fetchAllPRs(
   authors: string[],
   token?: string,
   myUsername?: string,
+  cache?: RequestCache,
 ): Promise<PullRequest[]> {
   const results = await Promise.allSettled(
-    repos.map((repo) => fetchPRsForRepo(repo, authors, token, myUsername)),
+    repos.map((repo) => fetchPRsForRepo(repo, authors, token, myUsername, cache)),
   );
 
   const allPRs: PullRequest[] = [];
   const errors: string[] = [];
+  let hasRateLimitError = false;
 
   results.forEach((result, index) => {
     if (result.status === 'fulfilled') {
       allPRs.push(...result.value);
     } else {
-      errors.push(`${repos[index]}: ${result.reason}`);
+      const errorMsg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      errors.push(`${repos[index]}: ${errorMsg}`);
+
+      if (result.reason instanceof RateLimitError) {
+        hasRateLimitError = true;
+      }
     }
   });
 
+  // Only throw if ALL repos failed
   if (errors.length > 0 && allPRs.length === 0) {
+    if (hasRateLimitError) {
+      throw new RateLimitError();
+    }
     throw new Error(`All fetches failed:\n${errors.join('\n')}`);
+  }
+
+  // If we have partial success with rate limit errors, log but don't throw
+  if (errors.length > 0) {
+    console.warn(`Partial fetch failure (${errors.length}/${repos.length} repos failed):`, errors);
   }
 
   return allPRs;
@@ -285,17 +352,20 @@ export async function fetchPRComments(
   repo: string,
   prNumber: number,
   token?: string,
+  cache?: RequestCache,
 ): Promise<PrComment[]> {
   const headers = buildHeaders(token);
 
   const [issueComments, reviewComments] = await Promise.all([
-    fetchJson<GitHubIssueComment[]>(
+    fetchWithCache<GitHubIssueComment[]>(
       `https://api.github.com/repos/${repo}/issues/${prNumber}/comments?per_page=100`,
       headers,
+      cache,
     ),
-    fetchJson<GitHubReviewComment[]>(
+    fetchWithCache<GitHubReviewComment[]>(
       `https://api.github.com/repos/${repo}/pulls/${prNumber}/comments?per_page=100`,
       headers,
+      cache,
     ),
   ]);
 
@@ -337,18 +407,21 @@ export async function fetchAuthorLastCommitDate(
   prNumber: number,
   authorUsername: string,
   token?: string,
+  cache?: RequestCache,
 ): Promise<string | null> {
+  const normalizedAuthor = normalizeUsername(authorUsername);
   const headers = buildHeaders(token);
 
-  const commits = await fetchJson<GitHubCommit[]>(
+  const commits = await fetchWithCache<GitHubCommit[]>(
     `https://api.github.com/repos/${repo}/pulls/${prNumber}/commits?per_page=100`,
     headers,
+    cache,
   );
 
   if (!commits || commits.length === 0) return null;
 
   const authorCommits = commits.filter(
-    (c) => c.author?.login.toLowerCase() === authorUsername.toLowerCase(),
+    (c) => c.author?.login.toLowerCase() === normalizedAuthor.toLowerCase(),
   );
 
   if (authorCommits.length === 0) return null;
@@ -366,25 +439,30 @@ export async function fetchLatestExternalActivity(
   prNumber: number,
   authorUsername: string,
   token?: string,
+  cache?: RequestCache,
 ): Promise<{ date: string; hasChangesRequested: boolean } | null> {
+  const normalizedAuthor = normalizeUsername(authorUsername);
   const headers = buildHeaders(token);
 
   const [issueComments, reviewComments, reviews] = await Promise.all([
-    fetchJson<GitHubIssueComment[]>(
+    fetchWithCache<GitHubIssueComment[]>(
       `https://api.github.com/repos/${repo}/issues/${prNumber}/comments?per_page=100`,
       headers,
+      cache,
     ),
-    fetchJson<GitHubReviewComment[]>(
+    fetchWithCache<GitHubReviewComment[]>(
       `https://api.github.com/repos/${repo}/pulls/${prNumber}/comments?per_page=100`,
       headers,
+      cache,
     ),
-    fetchJson<GitHubReview[]>(
+    fetchWithCache<GitHubReview[]>(
       `https://api.github.com/repos/${repo}/pulls/${prNumber}/reviews`,
       headers,
+      cache,
     ),
   ]);
 
-  const authorLower = authorUsername.toLowerCase();
+  const authorLower = normalizedAuthor.toLowerCase();
   let latestDate: string | null = null;
   let hasChangesRequested = false;
 

@@ -3,7 +3,9 @@ import {
   fetchAllPRs,
   fetchAuthorLastCommitDate,
   fetchLatestExternalActivity,
+  normalizeUsername,
   RateLimitError,
+  RequestCache,
 } from './githubClient.js';
 import { PrTreeProvider } from './prTreeProvider.js';
 import { MyPrsTreeProvider, detectNeedsAttention } from './myPrsTreeProvider.js';
@@ -22,6 +24,9 @@ import type { CachedState, PullRequest, TrackerConfig } from './types.js';
 const CACHED_STATE_KEY = 'teamPrTracker.cachedState';
 const AUTHOR_FILTER_KEY = 'teamPrTracker.authorFilter';
 
+const MIN_POLLING_MINUTES = 3;
+const MAX_POLLING_MINUTES = 10;
+
 const DEFAULT_CACHED_STATE: CachedState = {
   pullRequests: [],
   lastRefresh: null,
@@ -30,14 +35,22 @@ const DEFAULT_CACHED_STATE: CachedState = {
   notifiedStalePrIds: [],
 };
 
+function clampPollingInterval(minutes: number): number {
+  return Math.max(MIN_POLLING_MINUTES, Math.min(MAX_POLLING_MINUTES, minutes));
+}
+
 function readConfig(): TrackerConfig {
   const config = vscode.workspace.getConfiguration('teamPrTracker');
+  const rawUsername = config.get<string>('githubUsername', '');
+  const rawWatchedUsers = config.get<string[]>('watchedUsers', []);
+  const rawPollingInterval = config.get<number>('pollingIntervalMinutes', MIN_POLLING_MINUTES);
+
   return {
-    githubUsername: config.get<string>('githubUsername', ''),
+    githubUsername: rawUsername ? normalizeUsername(rawUsername) : '',
     watchedRepos: config.get<string[]>('watchedRepos', []),
-    watchedUsers: config.get<string[]>('watchedUsers', []),
+    watchedUsers: rawWatchedUsers.map(user => normalizeUsername(user)),
     stalePrDays: config.get<number>('stalePrDays', 3),
-    pollingIntervalMinutes: config.get<number>('pollingIntervalMinutes', 10),
+    pollingIntervalMinutes: clampPollingInterval(rawPollingInterval),
   };
 }
 
@@ -56,6 +69,7 @@ async function buildMyPrsActivityMap(
   prs: PullRequest[],
   githubUsername: string,
   token?: string,
+  cache?: RequestCache,
 ): Promise<Map<number, MyPrActivity>> {
   const activityMap = new Map<number, MyPrActivity>();
   if (!githubUsername) return activityMap;
@@ -68,8 +82,8 @@ async function buildMyPrsActivityMap(
   const results = await Promise.allSettled(
     myPRs.map(async (pr) => {
       const [lastCommitDate, externalActivity] = await Promise.all([
-        fetchAuthorLastCommitDate(pr.repo, pr.number, githubUsername, token),
-        fetchLatestExternalActivity(pr.repo, pr.number, githubUsername, token),
+        fetchAuthorLastCommitDate(pr.repo, pr.number, githubUsername, token, cache),
+        fetchLatestExternalActivity(pr.repo, pr.number, githubUsername, token, cache),
       ]);
 
       const detection = detectNeedsAttention(lastCommitDate, externalActivity);
@@ -128,6 +142,22 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   let isRefreshing = false;
+  let pollingIntervalId: ReturnType<typeof setInterval> | undefined;
+
+  function startPolling(intervalMinutes: number): void {
+    if (pollingIntervalId) {
+      clearInterval(pollingIntervalId);
+    }
+    const intervalMs = clampPollingInterval(intervalMinutes) * 60 * 1000;
+    pollingIntervalId = setInterval(() => doRefresh(true), intervalMs);
+  }
+
+  function stopPolling(): void {
+    if (pollingIntervalId) {
+      clearInterval(pollingIntervalId);
+      pollingIntervalId = undefined;
+    }
+  }
 
   async function doRefresh(silent = false): Promise<void> {
     if (isRefreshing) return;
@@ -156,68 +186,90 @@ export function activate(context: vscode.ExtensionContext): void {
     }
 
     isRefreshing = true;
-    const previousState = getCachedState(context);
 
-    try {
-      const prs = await fetchAllPRs(
-        config.watchedRepos,
-        config.watchedUsers,
-        token,
-        config.githubUsername || undefined,
-      );
+    const progressOptions: vscode.ProgressOptions = {
+      location: vscode.ProgressLocation.Window,
+      title: 'Team PR Tracker',
+    };
 
-      const newPRs = detectNewPRs(prs, previousState);
-      const stalePRs = detectStalePRs(prs, config.stalePrDays, previousState);
+    await vscode.window.withProgress(progressOptions, async (progress) => {
+      const previousState = getCachedState(context);
+      const cache = new RequestCache();
 
-      let newComments: { prTitle: string; commentId: number; author: string }[] = [];
-      if (config.githubUsername) {
-        newComments = await checkForNewComments(prs, previousState, config.githubUsername, token);
-      }
+      try {
+        progress.report({
+          message: `Fetching PRs from ${config.watchedRepos.length} repo${config.watchedRepos.length !== 1 ? 's' : ''}...`,
+        });
 
-      const updatedState = buildUpdatedNotificationState(
-        prs,
-        newComments.map((c) => c.commentId),
-        stalePRs.map((pr) => pr.id),
-        previousState,
-      );
-      await saveCachedState(context, updatedState);
-
-      treeProvider.updateData(prs, config.stalePrDays, updatedState.lastRefresh);
-      stalePrsProvider.updateData(prs, config.stalePrDays);
-
-      let activityMap = new Map<number, MyPrActivity>();
-      if (config.githubUsername) {
-        activityMap = await buildMyPrsActivityMap(prs, config.githubUsername, token);
-      }
-      myPrsProvider.updateData(prs, config.githubUsername, config.stalePrDays, activityMap);
-
-      if (previousState.lastRefresh !== null) {
-        await notifyNewPRs(newPRs);
-        await notifyNewComments(newComments);
-        await notifyStalePRs(stalePRs);
-      }
-
-      if (!silent) {
-        vscode.window.showInformationMessage(
-          `Team PR Tracker: Found ${prs.length} PR${prs.length !== 1 ? 's' : ''} across ${config.watchedRepos.length} repo${config.watchedRepos.length !== 1 ? 's' : ''}.`,
+        const prs = await fetchAllPRs(
+          config.watchedRepos,
+          config.watchedUsers,
+          token,
+          config.githubUsername || undefined,
+          cache,
         );
-      }
-    } catch (err) {
-      if (err instanceof RateLimitError) {
-        vscode.window.showErrorMessage(
-          'Team PR Tracker: GitHub API rate limit exceeded. Set a token to increase limits.',
+
+        progress.report({ message: 'Checking for new activity...' });
+
+        const newPRs = detectNewPRs(prs, previousState);
+        const stalePRs = detectStalePRs(prs, config.stalePrDays, previousState);
+
+        let newComments: { prTitle: string; commentId: number; author: string }[] = [];
+        if (config.githubUsername) {
+          newComments = await checkForNewComments(prs, previousState, config.githubUsername, token, cache);
+        }
+
+        const updatedState = buildUpdatedNotificationState(
+          prs,
+          newComments.map((c) => c.commentId),
+          stalePRs.map((pr) => pr.id),
+          previousState,
         );
-      } else {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Team PR Tracker: Refresh failed — ${msg}`);
+        await saveCachedState(context, updatedState);
+
+        progress.report({ message: 'Updating views...' });
+
+        treeProvider.updateData(prs, config.stalePrDays, updatedState.lastRefresh);
+        stalePrsProvider.updateData(prs, config.stalePrDays);
+
+        let activityMap = new Map<number, MyPrActivity>();
+        if (config.githubUsername) {
+          activityMap = await buildMyPrsActivityMap(prs, config.githubUsername, token, cache);
+        }
+        myPrsProvider.updateData(prs, config.githubUsername, config.stalePrDays, activityMap);
+
+        if (previousState.lastRefresh !== null) {
+          await notifyNewPRs(newPRs);
+          await notifyNewComments(newComments);
+          await notifyStalePRs(stalePRs);
+        }
+
+        if (!silent) {
+          vscode.window.showInformationMessage(
+            `Team PR Tracker: Found ${prs.length} PR${prs.length !== 1 ? 's' : ''} across ${config.watchedRepos.length} repo${config.watchedRepos.length !== 1 ? 's' : ''}.`,
+          );
+        }
+      } catch (err) {
+        if (err instanceof RateLimitError) {
+          vscode.window.showErrorMessage(
+            'Team PR Tracker: GitHub API rate limit exceeded. Set a token to increase limits.',
+          );
+        } else {
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          vscode.window.showErrorMessage(`Team PR Tracker: Refresh failed — ${msg}`);
+        }
+      } finally {
+        cache.clear();
+        isRefreshing = false;
       }
-    } finally {
-      isRefreshing = false;
-    }
+    });
   }
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('teamPrTracker.refreshNow', () => doRefresh(false)),
+    vscode.commands.registerCommand('teamPrTracker.refreshNow', async () => {
+      await doRefresh(false);
+      startPolling(readConfig().pollingIntervalMinutes);
+    }),
   );
 
   context.subscriptions.push(
@@ -291,7 +343,15 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('teamPrTracker.openPr', (url: string) => {
+    vscode.commands.registerCommand('teamPrTracker.openPr', (arg: unknown) => {
+      let url: string | undefined;
+
+      if (typeof arg === 'string') {
+        url = arg;
+      } else if (arg && typeof arg === 'object' && 'pr' in arg) {
+        url = (arg as { pr: { url: string } }).pr.url;
+      }
+
       if (url) {
         vscode.env.openExternal(vscode.Uri.parse(url));
       }
@@ -348,19 +408,20 @@ export function activate(context: vscode.ExtensionContext): void {
   doRefresh(true);
 
   const config = readConfig();
-  const intervalMs = config.pollingIntervalMinutes * 60 * 1000;
-  const pollingInterval = setInterval(() => doRefresh(true), intervalMs);
+  startPolling(config.pollingIntervalMinutes);
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('teamPrTracker')) {
+        const updatedConfig = readConfig();
+        startPolling(updatedConfig.pollingIntervalMinutes);
         doRefresh(true);
       }
     }),
   );
 
   context.subscriptions.push({
-    dispose: () => clearInterval(pollingInterval),
+    dispose: () => stopPolling(),
   });
 }
 
