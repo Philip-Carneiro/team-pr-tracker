@@ -86,7 +86,7 @@ All commands are accessible via the Command Palette (`Cmd+Shift+P` on Mac / `Ctr
 | `teamPrTracker.stalePrDays`            | `number`   | `3`     | Number of days without activity before a PR is considered stale                         |
 | `teamPrTracker.pollingIntervalMinutes` | `number`   | `3`     | Auto-refresh interval in minutes (min: 3, max: 10)                                      |
 
-![Settings Configuration](docs/images/settings-detail.png)
+![Settings Configuration](docs/images/settings.png)
 
 ---
 
