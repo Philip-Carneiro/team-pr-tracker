@@ -39,6 +39,15 @@ First stable release.
 - Opening PR from TreeView context menu now works correctly (handles both string URL and TreeItem object)
 - Refresh no longer throws "All fetches failed" on partial repo failures
 
+## [1.0.1] - 2026-04-23
+
+Fix for README.
+
+### Fixed
+
+- Fix images from README
+- Add Tutorial how to get GitHub Token for the extension at README
+
 ## [Unreleased]
 
 _Nothing yet._

@@ -106,10 +106,7 @@ jobs:
           draft: false
           prerelease: false
 
-      # Uncomment the step below to publish to the VS Code Marketplace.
-      # Requires a VSCE_PAT secret configured in the repository.
-      #
-      # - name: Publish to VS Code Marketplace
-      #   run: npx @vscode/vsce publish --no-git-tag-version --packagePath *.vsix
-      #   env:
-      #     VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      - name: Publish to VS Code Marketplace
+        run: npx @vscode/vsce publish --no-git-tag-version --packagePath *.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}

@@ -31,19 +31,58 @@ Install **Team PR Tracker** from the VS Code Marketplace, or load it manually vi
 code --install-extension team-pr-tracker-1.0.0.vsix
 ```
 
-### 2. Set Your GitHub Token
+### 2. Create a GitHub Token
 
-A GitHub Personal Access Token (PAT) is required for higher API rate limits (5,000 requests/hour vs. 60 without a token).
+A GitHub Personal Access Token is required for API access. We recommend using **Fine-grained tokens** for better security — they let you grant only the minimum permissions needed.
+
+#### Step-by-step: Create a Fine-grained Token
+
+1. Go to [GitHub Token Settings](https://github.com/settings/personal-access-tokens) and click **Generate new token** > **Fine-grained token**
+
+2. Fill in the token details:
+   - **Token name**: `Team PR Tracker` (or any descriptive name)
+   - **Expiration**: 90 days recommended (you can set a custom date)
+   - **Description** _(optional)_: `Token for Team PR Tracker VS Code extension`
+
+3. Set **Repository access**:
+   - **All repositories** — if you want to track PRs across all your repos
+   - **Only select repositories** — if you want to limit access to specific repos
+
+4. Set **Permissions** (expand "Repository permissions"):
+
+   | Permission        | Access    | Required? | Why                                       |
+   | ----------------- | --------- | --------- | ----------------------------------------- |
+   | **Pull requests** | Read-only | Required  | Fetch PR data, reviews, and comments      |
+   | **Metadata**      | Read-only | Automatic | Granted automatically with any permission |
+
+   > All other permissions can remain as **No access**. The extension only needs to _read_ pull request data.
+
+5. Click **Generate token**
+
+6. **Copy the token immediately** — you won't be able to see it again. It starts with `github_pat_`.
+
+> **Security warning:** Treat your token like a password. Never share it, commit it to a repository, or paste it in plain text files.
+
+#### Alternative: Classic Token
+
+If you prefer a classic token, go to [Classic Token Settings](https://github.com/settings/tokens) and select these scopes:
+
+- `repo` — for private repositories
+- `public_repo` — for public repositories only (less access)
+
+Classic tokens start with `ghp_`.
+
+### 3. Set Your Token in the Extension
 
 1. Open the Command Palette (`Cmd+Shift+P` on Mac / `Ctrl+Shift+P` on Windows/Linux)
 2. Run **Team PR Tracker: Set GitHub Token**
-3. Paste your token (starts with `ghp_` or `github_pat_`)
+3. Paste your token and press Enter
 
 > Your token is stored securely using VS Code's built-in SecretStorage and is never written to `settings.json`.
 
-**Required token scopes:** `repo` (for private repos) or `public_repo` (for public repos only).
+You can verify your token is configured by running **Team PR Tracker: View Token Status** from the Command Palette.
 
-### 3. Configure Watched Repos and Users
+### 4. Configure Watched Repos and Users
 
 Open VS Code Settings (`Cmd+,` / `Ctrl+,`) and search for **Team PR Tracker**:
 
@@ -51,13 +90,13 @@ Open VS Code Settings (`Cmd+,` / `Ctrl+,`) and search for **Team PR Tracker**:
 - **Watched Users** — Add the GitHub usernames whose PRs you want to track
 - **GitHub Username** — Set your own GitHub username to enable "My PRs" and comment notifications
 
-![Settings](docs/images/settings.png)
+![Settings](images/settings.png)
 
-### 4. Start Tracking
+### 5. Start Tracking
 
 Once configured, PRs will appear automatically in the sidebar panel. The extension refreshes on startup and then polls at the configured interval.
 
-![Sidebar Panel](docs/images/sidebar.png)
+![Sidebar Panel](images/sidebar.png)
 
 ---
 
@@ -85,8 +124,6 @@ All commands are accessible via the Command Palette (`Cmd+Shift+P` on Mac / `Ctr
 | `teamPrTracker.watchedUsers`           | `string[]` | `[]`    | GitHub usernames whose PRs to track                                                     |
 | `teamPrTracker.stalePrDays`            | `number`   | `3`     | Number of days without activity before a PR is considered stale                         |
 | `teamPrTracker.pollingIntervalMinutes` | `number`   | `3`     | Auto-refresh interval in minutes (min: 3, max: 10)                                      |
-
-![Settings Configuration](docs/images/settings.png)
 
 ---
 
